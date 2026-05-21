@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Performance Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        },
+                        neon: {
+                            blue: '#3b82f6',
+                            purple: '#8b5cf6',
+                            pink: '#ec4899',
+                            cyan: '#06b6d4',
+                        }
+                    },
+                    backgroundImage: {
+                        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #020617; /* slate-950 */
+            color: #f8fafc; /* slate-50 */
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background-image:
+                radial-gradient(circle at 15% 50%, rgba(139, 92, 246, 0.08), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.08), transparent 25%);
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7); /* slate-850 with opacity */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255,255,255,0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        .text-gradient {
+            background: linear-gradient(to right, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .badge-crimson {
+            background: rgba(220, 38, 38, 0.2);
+            border: 1px solid rgba(220, 38, 38, 0.5);
+            color: #fca5a5;
+        }
+
+        /* Custom Scrollbar for the table */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(71, 85, 105, 0.8);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 116, 139, 1);
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .live-indicator {
+            position: relative;
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .live-indicator::before {
+            content: '';
+            position: absolute;
+            left: -4px;
+            top: -4px;
+            width: 16px;
+            height: 16px;
+            background-color: #10b981;
+            border-radius: 50%;
+            z-index: -1;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+    </style>
+</head>
+<body class="p-6 md:p-8">
+
+    <div class="max-w-7xl mx-auto space-y-8">
+
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight text-white mb-1">Performance <span class="text-gradient">Telemetry</span></h1>
+                <p class="text-slate-400 text-sm">Real-time mobile rendering diagnostics & AI insights</p>
+            </div>
+
+            <div class="flex items-center gap-4 bg-slate-900/50 p-2 px-4 rounded-full border border-white/5">
+                <div class="flex items-center">
+                    <span class="live-indicator hidden" id="liveIndicator"></span>
+                    <span class="text-sm font-medium text-slate-300 mr-3" id="statusText">Paused</span>
+                </div>
+                <div class="h-4 w-px bg-slate-700"></div>
+                <label class="relative inline-flex items-center cursor-pointer ml-3">
+                    <input type="checkbox" id="autoRefreshToggle" class="sr-only peer">
+                    <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-neon-blue"></div>
+                    <span class="ml-2 text-sm font-medium text-slate-400">Auto-Refresh (30s)</span>
+                </label>
+            </div>
+        </header>
+
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Sessions -->
+            <div class="glass-card p-6 flex flex-col justify-between">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-slate-400 text-sm font-medium">Tracked Sessions</h3>
+                    <div class="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-white" id="kpi-sessions">-</div>
+                    <p class="text-xs text-slate-500 mt-1">Total payload array count</p>
+                </div>
+            </div>
+
+            <!-- Avg Jank Rate -->
+            <div class="glass-card p-6 flex flex-col justify-between">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-slate-400 text-sm font-medium">Avg Jank Rate</h3>
+                    <div class="p-2 rounded-lg bg-purple-500/10 text-purple-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-white" id="kpi-jank">-</div>
+                    <p class="text-xs text-slate-500 mt-1">Target: < 2%</p>
+                </div>
+            </div>
+
+            <!-- TTFF -->
+            <div class="glass-card p-6 flex flex-col justify-between">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-slate-400 text-sm font-medium">Avg TTFF</h3>
+                    <div class="p-2 rounded-lg bg-pink-500/10 text-pink-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-white"><span id="kpi-ttff">-</span> <span class="text-lg text-slate-500 font-normal">ms</span></div>
+                    <p class="text-xs text-slate-500 mt-1">Time to first frame</p>
+                </div>
+            </div>
+
+            <!-- Worst Frame -->
+            <div class="glass-card p-6 flex flex-col justify-between">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-slate-400 text-sm font-medium">Worst Render Frame</h3>
+                    <div class="p-2 rounded-lg bg-red-500/10 text-red-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-white"><span id="kpi-worst">-</span> <span class="text-lg text-slate-500 font-normal">ms</span></div>
+                    <p class="text-xs text-slate-500 mt-1">Max delay recorded</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Jank Rate Chart -->
+            <div class="glass-card p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">Average Jank Rate per Screen</h3>
+                <div class="relative h-64 w-full">
+                    <canvas id="jankChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Thread Duration Chart -->
+            <div class="glass-card p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">Thread Durations (Build vs Raster)</h3>
+                <div class="relative h-64 w-full">
+                    <canvas id="threadChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table & AI Panel Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Screen Table -->
+            <div class="glass-card lg:col-span-2 overflow-hidden flex flex-col">
+                <div class="p-6 border-b border-white/5 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-white">Screen Diagnostics</h3>
+                    <span class="text-xs text-slate-400">Select a row for AI insights</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-900/50 text-xs uppercase text-slate-400 tracking-wider">
+                                <th class="p-4 font-medium">Screen Name</th>
+                                <th class="p-4 font-medium text-right">Total Frames</th>
+                                <th class="p-4 font-medium text-right">Jank Rate</th>
+                                <th class="p-4 font-medium text-right">Worst Frame (ms)</th>
+                                <th class="p-4 font-medium text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="text-sm divide-y divide-white/5">
+                            <!-- Rows injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- AI Diagnostics Panel -->
+            <div class="glass-card p-6 flex flex-col relative overflow-hidden group">
+                <!-- Decorative AI background glow -->
+                <div class="absolute -top-24 -right-24 w-48 h-48 bg-purple-600/20 rounded-full blur-3xl group-hover:bg-purple-500/30 transition-all duration-500"></div>
+                <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-blue-600/20 rounded-full blur-3xl group-hover:bg-blue-500/30 transition-all duration-500"></div>
+
+                <div class="flex items-center gap-3 mb-6 relative z-10">
+                    <div class="p-2 rounded-xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-white/10">
+                        <svg class="w-6 h-6 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400">Gemini Diagnostics</h3>
+                        <p class="text-xs text-slate-400">AI-Powered Refactoring</p>
+                    </div>
+                </div>
+
+                <div id="aiPanelContent" class="flex-1 flex flex-col relative z-10">
+                    <div class="flex-1 flex flex-col items-center justify-center text-center p-6 text-slate-500 border border-dashed border-white/10 rounded-xl bg-slate-900/30">
+                        <svg class="w-10 h-10 mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+                        <p class="text-sm">Select a high-jank screen from the table to view AI-generated refactoring suggestions.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // Global State
+        let rawData = [];
+        let jankChartInstance = null;
+        let threadChartInstance = null;
+        let refreshIntervalId = null;
+
+        // Configuration for Chart.js
+        Chart.defaults.color = '#94a3b8'; // slate-400
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(15, 23, 42, 0.9)'; // slate-900
+        Chart.defaults.plugins.tooltip.titleColor = '#f8fafc';
+        Chart.defaults.plugins.tooltip.bodyColor = '#cbd5e1';
+        Chart.defaults.plugins.tooltip.borderColor = 'rgba(255,255,255,0.1)';
+        Chart.defaults.plugins.tooltip.borderWidth = 1;
+        Chart.defaults.plugins.tooltip.padding = 10;
+        Chart.defaults.plugins.tooltip.cornerRadius = 8;
+
+        // 1. Fetch Data Function
+        async function fetchMetrics() {
+            try {
+                // In production, this would hit '/api/metrics'
+                const response = await fetch('/api/metrics');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (!Array.isArray(data)) {
+                    console.error("Expected array from /api/metrics, received:", typeof data);
+                    return;
+                }
+
+                rawData = data;
+                updateDashboard();
+
+            } catch (error) {
+                console.error("Failed to fetch metrics:", error);
+                // Optionally show error state in UI
+            }
+        }
+
+        // 2. Update KPI Cards
+        function updateKPIs() {
+            if (rawData.length === 0) return;
+
+            // Total Sessions
+            document.getElementById('kpi-sessions').textContent = rawData.length.toLocaleString();
+
+            // Avg Jank Rate
+            const totalJankRate = rawData.reduce((sum, item) => sum + (item.jank_rate || 0), 0);
+            const avgJankRate = (totalJankRate / rawData.length) * 100;
+            const kpiJankEl = document.getElementById('kpi-jank');
+            kpiJankEl.textContent = avgJankRate.toFixed(2) + '%';
+            if (avgJankRate > 5) kpiJankEl.className = 'text-3xl font-bold text-red-400';
+            else if (avgJankRate > 2) kpiJankEl.className = 'text-3xl font-bold text-yellow-400';
+            else kpiJankEl.className = 'text-3xl font-bold text-emerald-400';
+
+            // Avg TTFF
+            const totalTTFF = rawData.reduce((sum, item) => sum + (item.time_to_first_frame_ms || 0), 0);
+            const avgTTFF = totalTTFF / rawData.length;
+            document.getElementById('kpi-ttff').textContent = avgTTFF.toFixed(0);
+
+            // Worst Frame
+            const worstFrame = Math.max(...rawData.map(item => item.worst_frame_ms || 0));
+            document.getElementById('kpi-worst').textContent = worstFrame.toFixed(1);
+        }
+
+        // Aggregation Helper for Charts
+        function aggregateByScreen() {
+            const screens = {};
+            rawData.forEach(item => {
+                if (!screens[item.screen_name]) {
+                    screens[item.screen_name] = { count: 0, jank_rate: 0, build_ms: 0, raster_ms: 0 };
+                }
+                screens[item.screen_name].count++;
+                screens[item.screen_name].jank_rate += item.jank_rate;
+                screens[item.screen_name].build_ms += item.avg_build_ms;
+                screens[item.screen_name].raster_ms += item.avg_raster_ms;
+            });
+
+            return Object.keys(screens).map(name => ({
+                screen_name: name,
+                avg_jank_rate: (screens[name].jank_rate / screens[name].count) * 100,
+                avg_build_ms: screens[name].build_ms / screens[name].count,
+                avg_raster_ms: screens[name].raster_ms / screens[name].count
+            })).sort((a, b) => b.avg_jank_rate - a.avg_jank_rate); // Sort by highest jank
+        }
+
+        // 3. Draw Charts
+        function drawCharts() {
+            const aggregatedData = aggregateByScreen();
+            const labels = aggregatedData.map(d => d.screen_name.replace('/', ''));
+
+            // --- Jank Chart ---
+            const jankCtx = document.getElementById('jankChart').getContext('2d');
+            const jankData = aggregatedData.map(d => d.avg_jank_rate);
+
+            // Create gradient
+            const jankGradient = jankCtx.createLinearGradient(0, 0, 0, 300);
+            jankGradient.addColorStop(0, 'rgba(236, 72, 153, 0.8)'); // pink-500
+            jankGradient.addColorStop(1, 'rgba(236, 72, 153, 0.1)');
+
+            if (jankChartInstance) jankChartInstance.destroy();
+            jankChartInstance = new Chart(jankCtx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Avg Jank Rate (%)',
+                        data: jankData,
+                        backgroundColor: jankGradient,
+                        borderColor: 'rgba(236, 72, 153, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' }
+                        },
+                        x: { grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            // --- Thread Chart ---
+            const threadCtx = document.getElementById('threadChart').getContext('2d');
+            const buildData = aggregatedData.map(d => d.avg_build_ms);
+            const rasterData = aggregatedData.map(d => d.avg_raster_ms);
+
+            if (threadChartInstance) threadChartInstance.destroy();
+            threadChartInstance = new Chart(threadCtx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'UI Build (ms)',
+                            data: buildData,
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)', // blue-500
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Raster (ms)',
+                            data: rasterData,
+                            backgroundColor: 'rgba(139, 92, 246, 0.8)', // purple-500
+                            borderColor: 'rgba(139, 92, 246, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' }
+                        },
+                        x: { grid: { display: false } }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            align: 'end',
+                            labels: { boxWidth: 12, usePointStyle: true, pointStyle: 'rectRounded' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 4. Update Screen Table
+        function updateTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            // Grouping data roughly for display or just showing latest. Let's show latest distinct screens.
+            // Sort by jank rate descending
+            const sortedData = [...rawData].sort((a, b) => b.jank_rate - a.jank_rate);
+
+            // Take top 10 or distinct
+            const seen = new Set();
+            const displayData = sortedData.filter(item => {
+                if (seen.has(item.screen_name)) return false;
+                seen.add(item.screen_name);
+                return true;
+            }).slice(0, 8);
+
+            displayData.forEach((item, index) => {
+                const jankPct = (item.jank_rate * 100).toFixed(2);
+                const isHighJank = jankPct > 5.0;
+
+                const tr = document.createElement('tr');
+                tr.className = `group hover:bg-white/5 transition-colors cursor-pointer border-l-2 ${isHighJank ? 'border-red-500' : 'border-transparent hover:border-blue-500'}`;
+
+                // Keep data on element for AI panel lookup
+                tr.dataset.item = JSON.stringify(item);
+                tr.onclick = function() { renderAIPanel(JSON.parse(this.dataset.item)); };
+
+                let badgeHtml = isHighJank
+                    ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium badge-crimson ml-2">High Jank</span>`
+                    : '';
+
+                tr.innerHTML = `
+                    <td class="p-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <span class="font-medium text-slate-200">${item.screen_name}</span>
+                            ${badgeHtml}
+                        </div>
+                        <div class="text-xs text-slate-500 mt-1">${item.device_model} • ${item.app_version}</div>
+                    </td>
+                    <td class="p-4 text-right text-slate-300 font-mono text-sm">${item.total_frames}</td>
+                    <td class="p-4 text-right">
+                        <span class="font-mono text-sm ${isHighJank ? 'text-red-400 font-semibold' : 'text-slate-300'}">${jankPct}%</span>
+                    </td>
+                    <td class="p-4 text-right text-slate-300 font-mono text-sm">${item.worst_frame_ms.toFixed(1)}</td>
+                    <td class="p-4 text-center">
+                        <button class="text-slate-400 hover:text-white transition-colors p-1 bg-slate-800 rounded opacity-0 group-hover:opacity-100">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 5. Render AI Panel
+        function renderAIPanel(item) {
+            const panel = document.getElementById('aiPanelContent');
+
+            // Simulate Gemini Analysis Logic
+            const isRasterBound = item.avg_raster_ms > item.avg_build_ms && item.avg_raster_ms > 16;
+            const isBuildBound = item.avg_build_ms > item.avg_raster_ms && item.avg_build_ms > 16;
+
+            let diagnosis = "General performance degradation detected.";
+            let recommendation = "Review overall widget tree complexity and check for expensive synchronous operations in `build` methods.";
+            let badgeColor = "blue";
+            let threadStr = "Unknown";
+
+            if (isRasterBound) {
+                diagnosis = "Raster-Thread Bottleneck Identified.";
+                recommendation = "High raster times indicate heavy rendering. Consider using `RepaintBoundary` around static content to prevent unnecessary repainting of complex UI elements. Check for excessive use of `Opacity`, `ClipRRect`, or intrinsic passes.";
+                badgeColor = "purple";
+                threadStr = `Raster: ${item.avg_raster_ms}ms`;
+            } else if (isBuildBound || item.jank_rate > 0.05) {
+                diagnosis = "UI-Thread (Build) Bottleneck Identified.";
+                recommendation = "High build times suggest expensive widget rebuilding. Implement `const` constructors where possible. If using state management (like Provider/Riverpod), utilize `Selector` or `Consumer` to narrowly scope rebuilds only to widgets whose state has changed.";
+                badgeColor = "pink";
+                threadStr = `UI Build: ${item.avg_build_ms}ms`;
+            } else {
+                diagnosis = "Performance within acceptable bounds.";
+                recommendation = "No critical refactoring required. Continue monitoring TTFF and Jank rates for anomalies during peak load.";
+                badgeColor = "emerald";
+                threadStr = "Balanced";
+            }
+
+            // Typing animation effect simulation
+            panel.innerHTML = `
+                <div class="bg-slate-900/50 rounded-xl border border-white/5 p-5 animate-pulse">
+                    <div class="h-4 bg-slate-700 rounded w-3/4 mb-3"></div>
+                    <div class="h-4 bg-slate-700 rounded w-full mb-3"></div>
+                    <div class="h-4 bg-slate-700 rounded w-5/6"></div>
+                </div>
+            `;
+
+            setTimeout(() => {
+                panel.innerHTML = `
+                    <div class="flex-1 flex flex-col space-y-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-mono text-slate-400 bg-slate-900 px-2 py-1 rounded">Target: ${item.screen_name}</span>
+                            <span class="text-xs font-medium text-${badgeColor}-400 bg-${badgeColor}-500/10 px-2 py-1 rounded border border-${badgeColor}-500/20">${threadStr}</span>
+                        </div>
+
+                        <div class="bg-slate-900/50 rounded-xl border border-white/5 p-4 flex-1">
+                            <h4 class="text-white font-semibold mb-2 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                                Diagnosis
+                            </h4>
+                            <p class="text-sm text-slate-300 leading-relaxed">${diagnosis}</p>
+
+                            <h4 class="text-white font-semibold mt-4 mb-2 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                                Refactoring Proposal
+                            </h4>
+                            <p class="text-sm text-slate-300 leading-relaxed font-mono text-xs bg-black/30 p-3 rounded-lg border border-white/5 shadow-inner">${recommendation}</p>
+                        </div>
+                    </div>
+                `;
+            }, 600); // Fake delay for LLM loading
+        }
+
+        // Master Update Function
+        function updateDashboard() {
+            updateKPIs();
+            drawCharts();
+            updateTable();
+        }
+
+        // 6. Auto-Refresh Logic
+        const toggle = document.getElementById('autoRefreshToggle');
+        const liveIndicator = document.getElementById('liveIndicator');
+        const statusText = document.getElementById('statusText');
+
+        toggle.addEventListener('change', function() {
+            if (this.checked) {
+                liveIndicator.classList.remove('hidden');
+                statusText.textContent = "Live";
+                statusText.classList.remove('text-slate-500');
+                statusText.classList.add('text-emerald-400');
+
+                refreshIntervalId = setInterval(() => {
+                    // Optional: Visual indication of fetch
+                    statusText.style.opacity = '0.5';
+                    fetchMetrics().then(() => {
+                        statusText.style.opacity = '1';
+                    });
+                }, 30000);
+            } else {
+                liveIndicator.classList.add('hidden');
+                statusText.textContent = "Paused";
+                statusText.classList.remove('text-emerald-400');
+                statusText.classList.add('text-slate-500');
+
+                if (refreshIntervalId) clearInterval(refreshIntervalId);
+            }
+        });
+
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchMetrics();
+        });
+
+    </script>
+</body>
+</html>
