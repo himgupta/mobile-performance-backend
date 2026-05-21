@@ -1,6 +1,8 @@
 # Mobile Performance Telemetry Backend
 
-This repository contains the backend service for processing and diagnosing mobile application performance telemetry data, designed to ingest payloads from `appinsights.in`.
+This repository contains the backend service for processing and diagnosing mobile application performance telemetry data. It is specifically designed to ingest high-throughput telemetry payloads from our internal mobile applications via `appinsights.in`.
+
+The primary goal of this service is to capture performance metrics—such as time-to-first-frame, total monitored frames, and jank frame counts—directly from devices in the field (QA and Staging environments). By securely accepting these reports and offloading the heavy lifting to an asynchronous background worker, the API remains blazing fast. Behind the scenes, the service persists these metrics into a time-series optimized Firestore database and leverages Google's Gemini Gen AI model to automatically diagnose the root cause of rendering lags (e.g., UI-thread bound vs. Raster-thread bound issues) and suggest actionable code refactoring proposals based on the offending page's source code.
 
 ## Architecture Overview
 
