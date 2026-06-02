@@ -19,7 +19,7 @@ app.use(express.json({ limit: '500kb' }));
 // Note: when running from dist/index.js, __dirname is dist/. We need to go up one level.
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Mount routes
+// Mount routes (Triggers CD pipeline with updated GCP IAM roles)
 app.use('/', telemetryRouter);
 
 // Mock data endpoint for dashboard
